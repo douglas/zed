@@ -32,11 +32,11 @@ use futures::{
 use gpui::{
     action_as, actions, canvas, impl_action_as, impl_actions, point, relative, size,
     transparent_black, Action, AnyElement, AnyView, AnyWeakView, AppContext, AsyncAppContext,
-    AsyncWindowContext, Bounds, CursorStyle, Decorations, DragMoveEvent, Entity as _, EntityId,
-    EventEmitter, Flatten, FocusHandle, FocusableView, Global, Hsla, KeyContext, Keystroke,
-    ManagedView, Model, ModelContext, MouseButton, PathPromptOptions, Point, PromptLevel, Render,
-    ResizeEdge, Size, Stateful, Subscription, Task, Tiling, View, WeakView, WindowBounds,
-    WindowHandle, WindowId, WindowOptions,
+    AsyncWindowContext, Axis, Bounds, CursorStyle, Decorations, DragMoveEvent, Entity as _,
+    EntityId, EventEmitter, Flatten, FocusHandle, FocusableView, Global, Hsla, KeyContext,
+    Keystroke, ManagedView, Model, ModelContext, MouseButton, PathPromptOptions, Point,
+    PromptLevel, Render, ResizeEdge, Size, Stateful, Subscription, Task, Tiling, View, WeakView,
+    WindowBounds, WindowHandle, WindowId, WindowOptions,
 };
 pub use item::{
     FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings, PreviewTabsSettings,
@@ -2964,6 +2964,9 @@ impl Workspace {
             pane::Event::Split(direction) => {
                 self.split_and_clone(pane, *direction, cx);
             }
+            pane::Event::MoveSplit(direction) => {
+                self.move_split(pane, *direction, cx);
+            }
             pane::Event::JoinIntoNext => self.join_pane_into_next(pane, cx),
             pane::Event::JoinAll => self.join_all_panes(cx),
             pane::Event::Remove { focus_on_pane } => {
@@ -3072,6 +3075,56 @@ impl Workspace {
             new_pane.update(cx, |pane, cx| pane.add_item(clone, true, true, None, cx));
             self.center.split(&pane, &new_pane, direction).unwrap();
             Some(new_pane)
+        } else {
+            None
+        };
+        cx.notify();
+        maybe_pane_handle
+    }
+
+    pub fn move_split(
+        &mut self,
+        pane: View<Pane>,
+        direction: SplitDirection,
+        cx: &mut ViewContext<Self>,
+    ) -> Option<View<Pane>> {
+        let item = pane.read(cx).active_item()?;
+
+        let desired_axis = match direction {
+            SplitDirection::Left | SplitDirection::Right => Axis::Horizontal,
+            SplitDirection::Up | SplitDirection::Down => Axis::Vertical,
+        };
+
+        let maybe_pane_handle = if let Some(clone) = item.clone_on_split(self.database_id(), cx) {
+            let split_already_exists = match &self.center.root {
+                Member::Axis(axis) => axis.axis == desired_axis,
+                Member::Pane(_) => false,
+            };
+
+            if split_already_exists {
+                let member_ix = match direction {
+                    SplitDirection::Left | SplitDirection::Up => 0,
+                    SplitDirection::Right | SplitDirection::Down => 1,
+                };
+
+                let destination_pane = match &self.center.root {
+                    Member::Axis(axis) => axis.members[member_ix].first_pane(),
+                    Member::Pane(pane) => pane.clone(),
+                };
+
+                move_item(&pane, &destination_pane, item.item_id(), 0, cx);
+                Some(destination_pane)
+            } else {
+                let new_pane = self.add_pane(cx);
+                new_pane.update(cx, |pane, cx| pane.add_item(clone, true, true, None, cx));
+                pane.update(cx, |old_pane, cx| {
+                    if let Some(item_ix) = old_pane.index_for_item(&*item) {
+                        old_pane.remove_item(item_ix, false, false, cx);
+                    }
+                });
+                self.center.split(&pane, &new_pane, direction).unwrap();
+                Some(new_pane)
+            }
         } else {
             None
         };
