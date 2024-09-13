@@ -162,7 +162,7 @@ impl Member {
         }
     }
 
-    fn first_pane(&self) -> View<Pane> {
+    pub(crate) fn first_pane(&self) -> View<Pane> {
         match self {
             Member::Axis(axis) => axis.members[0].first_pane(),
             Member::Pane(pane) => pane.clone(),

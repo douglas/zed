@@ -151,6 +151,10 @@ actions!(
         GoForward,
         JoinIntoNext,
         JoinAll,
+        MoveSplitLeft,
+        MoveSplitUp,
+        MoveSplitRight,
+        MoveSplitDown,
         ReopenClosedItem,
         SplitLeft,
         SplitUp,
@@ -192,6 +196,7 @@ pub enum Event {
         item_id: EntityId,
     },
     Split(SplitDirection),
+    MoveSplit(SplitDirection),
     JoinAll,
     JoinIntoNext,
     ChangeItemTitle,
@@ -223,6 +228,10 @@ impl fmt::Debug for Event {
                 .finish(),
             Event::Split(direction) => f
                 .debug_struct("Split")
+                .field("direction", direction)
+                .finish(),
+            Event::MoveSplit(direction) => f
+                .debug_struct("MoveSplit")
                 .field("direction", direction)
                 .finish(),
             Event::JoinAll => f.write_str("JoinAll"),
@@ -1669,6 +1678,10 @@ impl Pane {
         cx.emit(Event::Split(direction));
     }
 
+    pub fn move_split(&mut self, direction: SplitDirection, cx: &mut ViewContext<Self>) {
+        cx.emit(Event::MoveSplit(direction));
+    }
+
     pub fn toolbar(&self) -> &View<Toolbar> {
         &self.toolbar
     }
@@ -2585,6 +2598,22 @@ impl Render for Pane {
                 cx.listener(|pane, _: &SplitRight, cx| pane.split(SplitDirection::Right, cx)),
             )
             .on_action(cx.listener(|pane, _: &SplitDown, cx| pane.split(SplitDirection::Down, cx)))
+            .on_action(
+                cx.listener(|pane, _: &MoveSplitLeft, cx| {
+                    pane.move_split(SplitDirection::Left, cx)
+                }),
+            )
+            .on_action(cx.listener(|pane, _: &MoveSplitRight, cx| {
+                pane.move_split(SplitDirection::Right, cx)
+            }))
+            .on_action(
+                cx.listener(|pane, _: &MoveSplitUp, cx| pane.move_split(SplitDirection::Up, cx)),
+            )
+            .on_action(
+                cx.listener(|pane, _: &MoveSplitDown, cx| {
+                    pane.move_split(SplitDirection::Down, cx)
+                }),
+            )
             .on_action(cx.listener(|pane, _: &GoBack, cx| pane.navigate_backward(cx)))
             .on_action(cx.listener(|pane, _: &GoForward, cx| pane.navigate_forward(cx)))
             .on_action(cx.listener(|pane, _: &JoinIntoNext, cx| pane.join_into_next(cx)))
